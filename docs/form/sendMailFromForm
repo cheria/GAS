@@ -1,0 +1,123 @@
+/*
+これを使った場合、scriptの所有者が送信元になり、現時点では避けられません。
+
+使い方
+- mailParamとcolParamの値を修正して下さい。
+
+以下、注意書きです。
+
+苦肉の策として、以下の設定をしています。
+- 返信先をadminで設定する(MLなど)
+- 差出人の表示をadminNmで設定する。
+
+これはフォームで登録されたときのトリガーとして設定してください。
+サンプルのフォームはこんな感じです。
+- 1行目をカラム名として扱います。
+- 最終行を入力値として扱います。(※フォーム対応なので)
+
+|1|会社名|氏名|メールアドレス(to)|メールアドレス(CC)|xxx|xxx|....
+|2|OFFICE|NAME|TO_ADDRESS        |CC_ADDRESS        |xxx|xxx|....
+*/
+
+var mailParam = {
+  admin:   "xxx@google.co.jp", //送信元と異なる場合に入力
+  adminNm: "管理者",
+  subject: "タイトル",
+  header:  "文章の頭に書きたいことを追記\n"
+         + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+         + "□ 入力内容 □\n\n",
+           // ここからfooterまでの間にはformの入力内容が吐き出される
+  footer:  "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+         + "文章の終わりにかきたいことを\n"
+         + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+         + ""
+}
+
+// 取得元のカラムの名前
+var colParam = {
+  office: "会社名",
+  name:   "氏名",
+  to:     "メールアドレス(to)",
+  cc:     "メールアドレス(CC)"
+}
+
+function testVar() {
+  Logger.log(mailbody);
+  Logger.log(mailbody.admin);
+}
+
+function sendMailFromForm() {
+    Logger.log('sendMailFromForm() debug start');
+
+    //------------------------------------------------------------
+    // 設定エリアここから
+    //------------------------------------------------------------
+
+    // 件名、本文、フッター
+    var admin   = mailParam.admin; 
+    var header  = mailParam.header; 
+    var footer  = mailParam.footer; 
+
+    // 入力カラム名の指定
+    var COMP_COL_NAME = colParam.office;
+    var NAME_COL_NAME = colParam.name;
+    var TO_COL_NAME   = colParam.to;
+    var CC_COL_NAME   = colParam.cc;
+
+    // メール送信先等
+    var bcc     = admin; // Bcc:
+    var reply   = admin; // Reply-To:
+    var to      = "";    // To:
+    var cc      = "";    // Cc:
+
+    //------------------------------------------------------------
+    // 設定エリアここまで
+    //------------------------------------------------------------
+
+    try{
+      // スプレッドシートの操作
+      var sh   = SpreadsheetApp.getActiveSheet();
+      var rows = sh.getLastRow();
+      var cols = sh.getLastColumn();
+      var rg   = sh.getDataRange();
+      
+      // メール本文設定用
+      var officeNm = "";
+      var addresseeNm = "";
+      var body = "";
+      
+//      Logger.log("rows="+rows+" cols="+cols);
+
+      // メール件名・本文作成と送信先メールアドレス取得
+      for (var j = 1; j <= cols; j++ ) {
+        var col_name  = rg.getCell(1, j).getValue();    // カラム名
+        var col_value = rg.getCell(rows, j).getValue(); // 入力値
+
+        body += "【"+col_name+"】\n";
+        body += col_value + "\n\n";
+        
+        if ( col_name === COMP_COL_NAME ) officeNm = col_value + "\n";
+        if ( col_name === NAME_COL_NAME ) addresseeNm = col_value +" 様\n\n";
+        if ( col_name === TO_COL_NAME )   to = col_value;
+        if ( col_name === CC_COL_NAME )   cc = col_value;
+      }
+
+      // 送信先オプション
+      var options  = {};
+      options.name = mailParam.adminNm;;
+      if ( cc )    options.cc      = cc;
+      if ( bcc )   options.bcc     = bcc;
+      if ( reply ) options.replyTo = reply;
+
+//    Logger.log(mailParam.subject + officeNm + addresseeNm + header + body + footer);
+      
+      // メール送信
+      if ( to ) {
+        MailApp.sendEmail(to, mailParam.subject, officeNm + addresseeNm + header + body + footer, options);
+      }else{
+        MailApp.sendEmail(admin, "【失敗】Googleフォームにメールアドレスが指定されていません", body);
+      }
+    }catch(e){
+      MailApp.sendEmail(admin, "【失敗】Googleフォームからメール送信中にエラーが発生", e.message);
+    } 
+}
